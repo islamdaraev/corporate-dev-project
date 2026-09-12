@@ -4,6 +4,7 @@ package bloodbank;
  * Правила перевода пакета крови из одного статуса в другой.
  * Разрешённый переход возвращает новый статус.
  * Запрещённый переход бросает IllegalStateException.
+ * нет наследования
  */
 public final class BloodUnitPolicy {
 
