@@ -1,5 +1,9 @@
 package bloodbank;
 
+import bloodbank.domain.BloodUnitId;
+import bloodbank.domain.BloodUnitPolicy;
+import bloodbank.domain.BloodUnitStatus;
+
 public class Demo {
 
     public static void main(String[] args) {
@@ -20,7 +24,7 @@ public class Demo {
 
         System.out.println();
         System.out.println("Проверка запрещённых действий:");
-
+        /**чтобы программа не упала, когда специально проверяем запрещённое действие.*/
         try {
             policy.move(BloodUnitStatus.COLLECTED, BloodUnitStatus.ISSUED);
         } catch (IllegalStateException e) {

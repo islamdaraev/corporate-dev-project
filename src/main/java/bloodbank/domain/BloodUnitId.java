@@ -1,8 +1,9 @@
-package bloodbank;
+package bloodbank.domain;
 
 import java.util.Objects;
 
 /**
+ * класс для хранения и проверки
  * Номер пакета крови, например "BU-2026-000123".
  * Пустой или отсутствующий (null) номер недопустим.
  * нет наследования

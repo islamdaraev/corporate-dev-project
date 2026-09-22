@@ -1,4 +1,4 @@
-package bloodbank;
+package bloodbank.domain;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -15,10 +15,9 @@ class BloodUnitPolicyTest {
      * Четыре строки из README: два разрешённых перехода и два запрещённых.
      * allowed = true  -> move возвращает новый статус
      * allowed = false -> move бросает IllegalStateException
-     * следующий метод запустится несколько раз — по разу на каждую строку данных из @CsvSource
-     * Начало данных для теста.
-     * • @CsvSource — аннотация «вот данные»
-     * • ({ — открывает список строк
+     *
+     * @CsvSource аннотация «вот данные»
+     * открывает список строк
      */
     @ParameterizedTest
     @CsvSource({
