@@ -53,3 +53,58 @@
 - **`ISSUED → RELEASED`** — возврат уже выданного пакета обратно на склад как годного.
   Пакет находился вне холодильника в больнице, холодовая цепь разорвана. Повторно пускать
   его в выдачу другому пациенту нельзя — кровь могла испортиться.
+
+## Lab 2 — Spring Boot
+
+К проекту подключён Spring Boot. Продукт и статусы из лабы 1 не менялись — только добавилась
+обвязка вокруг них. Правила (`Rule` и его реализации) остаются чистой Java, без единого
+`import org.springframework` — Spring работает только на границе, в пакете `config`.
+
+### Package diagram
+
+```
+  dto          client        handler         config
+  (JSON later) (HTTP later)  (HTTP week 9)   Application
+                                             BloodUnitService (@Service)
+       \            \            /                |
+        \            \          /           injects Rule
+         \            \        /
+                     domain
+     BloodUnitId  BloodUnitStatus  BloodUnitPolicy
+     Rule, TransitionRule, FinalStatusRule, RuleChain
+                     (no Spring)
+```
+
+Стрелки направлены внутрь. `domain` не импортирует `org.springframework` — проверить можно
+поиском по проекту, совпадений быть не должно.
+
+### Что в каждом пакете
+
+- **`domain`** — чистая Java, без Spring.
+  - `BloodUnitId`, `BloodUnitStatus`, `BloodUnitPolicy` — из лабы 1, без изменений.
+  - `Rule` — интерфейс с одним методом `check(from, to)`: молчит, если переход разрешён,
+    бросает исключение, если нет.
+  - `TransitionRule` — первая реализация `Rule`, таблица переходов (та же, что в `BloodUnitPolicy`).
+  - `FinalStatusRule` — вторая реализация `Rule`, отдельный стоп-фактор: из `ISSUED`
+    и `DISCARDED` двигаться нельзя никуда.
+  - `RuleChain` — третья реализация `Rule`, склеивает две проверки в одну цепочку.
+- **`config`** — единственное место, где встречается Spring.
+  - `Application` — точка входа, `@SpringBootApplication`.
+  - `BloodUnitService` — `@Service`, получает готовый `Rule` через конструктор
+    (Dependency Injection) и не знает, какая именно реализация за ним стоит.
+  - `RuleConfig` — `@Configuration` с `@Bean`, который собирает `RuleChain` из
+    `TransitionRule` и `FinalStatusRule` и отдаёт его как единый `Rule`.
+- **`dto`**, **`client`**, **`handler`** — пока пустые, задел на будущие лабы
+  (JSON, HTTP-клиент, HTTP-обработчики).
+
+### Запуск и проверка
+
+```bash
+mvn spring-boot:run
+```
+Приложение стартует и висит (веб-сервера нет, REST в этой лабе не требуется).
+
+```bash
+mvn -q verify
+```
+Должно пройти без вывода и без ошибок.
