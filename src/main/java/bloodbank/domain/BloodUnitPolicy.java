@@ -1,4 +1,4 @@
-package bloodbank;
+package bloodbank.domain;
 
 /**
  * Правила перевода пакета крови из одного статуса в другой.
