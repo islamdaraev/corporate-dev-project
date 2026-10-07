@@ -1,6 +1,6 @@
 package bloodbank;
 
-import bloodbank.domain.BloodUnitId;
+import bloodbank.domain.BloodUnitNumber;
 import bloodbank.domain.BloodUnitPolicy;
 import bloodbank.domain.BloodUnitStatus;
 
@@ -9,7 +9,7 @@ public class Demo {
     public static void main(String[] args) {
         BloodUnitPolicy policy = new BloodUnitPolicy();
 
-        BloodUnitId id = new BloodUnitId("BU-2026-000123");
+        BloodUnitNumber id = new BloodUnitNumber("BU-2026-000123");
         System.out.println("Пакет: " + id);
 
         BloodUnitStatus s = BloodUnitStatus.COLLECTED;
@@ -36,7 +36,7 @@ public class Demo {
             System.out.println(" поймали: " + e.getMessage());
         }
         try {
-            new BloodUnitId("   ");
+            new BloodUnitNumber("   ");
         } catch (IllegalArgumentException e) {
             System.out.println(" поймали: " + e.getMessage());
         }
