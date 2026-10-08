@@ -14,8 +14,10 @@
 
 **Пакет крови** — тип `BloodUnit` (в лабе 1 представлен идентификатором и статусом).
 
-- Идентификатор — `BloodUnitId`, строка вида `BU-2026-000123`.
-  Пустой или отсутствующий (`null`) номер не допускается — конструктор бросает `IllegalArgumentException`.
+- Идентификатор — `BloodUnitId`, обёртка над UUID (`BloodUnitId.newId()`).
+  Пустое значение, `null` или не-UUID не допускаются — конструктор бросает `IllegalArgumentException`.
+- Номер для людей — `BloodUnitNumber`, строка вида `BU-2026-000123` (бизнес-ключ, в базе UNIQUE).
+  Пустой или `null` номер тоже даёт `IllegalArgumentException`.
 - Статус — `BloodUnitStatus`:
 
 | Статус | Что означает |
@@ -94,8 +96,8 @@
     (Dependency Injection) и не знает, какая именно реализация за ним стоит.
   - `RuleConfig` — `@Configuration` с `@Bean`, который собирает `RuleChain` из
     `TransitionRule` и `FinalStatusRule` и отдаёт его как единый `Rule`.
-- **`dto`**, **`client`**, **`handler`** — пока пустые, задел на будущие лабы
-  (JSON, HTTP-клиент, HTTP-обработчики).
+- **`dto`**, **`handler`** — пока пустые, задел на будущие лабы (JSON, HTTP-обработчики).
+  **`client`** с лабы 3 не пустой: там внешние порты (см. ниже).
 
 ### Запуск и проверка
 
@@ -108,3 +110,32 @@ mvn spring-boot:run
 mvn -q verify
 ```
 Должно пройти без вывода и без ошибок.
+
+## Lab 3 — PostgreSQL и JDBC
+
+Пакеты крови сохраняются в PostgreSQL (локально: база `css`, пользователь `css`, пароль `css`).
+Таблицу создаёт `src/main/resources/db/schema.sql`, Flyway и JPA не используются.
+
+У пакета два идентификатора:
+
+| | `id` | `business_key` |
+|---|---|---|
+| Что это | UUID, `BloodUnitId.newId()` | номер для людей, `BloodUnitNumber` |
+| В базе | PRIMARY KEY | UNIQUE NOT NULL |
+
+Список в `CHECK` совпадает со статусами из таблицы выше
+(`COLLECTED`, `TESTED`, `RELEASED`, `ISSUED`, `DISCARDED`).
+
+Новые пакеты: `persistence` (JDBC, только SQL) и `client` (внешние порты, пока консоль).
+`domain` не импортирует ни `java.sql`, ни `org.springframework`.
+
+- `BloodUnitRepository` (интерфейс в `domain`) — что нужно сервису от хранилища.
+  Его реализует `BloodUnitJdbc` в `persistence`.
+- `HospitalNotifier` (порт в `domain`) — сообщить больнице, что пакет выдан.
+  Реализует `ConsoleHospitalNotifier` в `client`.
+- `DuplicateBloodUnit` — unchecked-исключение «такой номер уже есть». Его бросает репозиторий,
+  а транзакция откатывается.
+
+Тесты: `BloodUnitServiceTest` (порт замокан), `BloodUnitDbTest`:
+`secondStatementRollsBack` — count 0, `secondRequestKeepsTheFirst` — count 1.
+Запуск: `mvn -q verify` (PostgreSQL должен быть запущен).

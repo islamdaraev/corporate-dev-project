@@ -6,6 +6,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BloodUnitPolicyTest {
 
@@ -35,6 +36,15 @@ class BloodUnitPolicyTest {
     }
 
     @Test
+    void forbiddenMoveExplainsItself() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> policy.move(BloodUnitStatus.COLLECTED, BloodUnitStatus.ISSUED));
+
+        assertTrue(error.getMessage().contains("COLLECTED"));
+        assertTrue(error.getMessage().contains("ISSUED"));
+    }
+
+    @Test
     void nullIdIsRejected() {
         assertThrows(IllegalArgumentException.class, () -> new BloodUnitId(null));
     }
@@ -42,5 +52,20 @@ class BloodUnitPolicyTest {
     @Test
     void blankIdIsRejected() {
         assertThrows(IllegalArgumentException.class, () -> new BloodUnitId("   "));
+    }
+
+    @Test
+    void notUuidIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new BloodUnitId("BU-2026-000123"));
+    }
+
+    @Test
+    void nullNumberIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new BloodUnitNumber(null));
+    }
+
+    @Test
+    void blankNumberIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new BloodUnitNumber("   "));
     }
 }
