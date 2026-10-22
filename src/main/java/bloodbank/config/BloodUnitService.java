@@ -4,8 +4,10 @@ import bloodbank.domain.BloodUnitId;
 import bloodbank.domain.BloodUnitNumber;
 import bloodbank.domain.BloodUnitRepository;
 import bloodbank.domain.BloodUnitStatus;
+import bloodbank.domain.DuplicateBloodUnit;
 import bloodbank.domain.HospitalNotifier;
 import bloodbank.domain.Rule;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,17 +49,31 @@ public class BloodUnitService {
      */
     @Transactional
     public void register(BloodUnitId id, BloodUnitNumber number, String title) {
-        units.insert(id.value(), number.value(), BloodUnitStatus.COLLECTED.name(), title);
+        save(id.value(), number, title);
     }
 
     /**
      * Две вставки в ОДНОЙ транзакции: вторая падает, откатывается всё.
      * ACID: A — Atomicity. Либо обе вставки, либо ни одной (count = 0).
-     * try/catch здесь нет специально: проглоченная ошибка закоммитила бы первую вставку.
+     * Ошибку про дубликат мы не прячем, а бросаем заново как DuplicateBloodUnit (см. save):
+     * если бы просто вернулись из catch, транзакция закоммитила бы первую вставку.
      */
     @Transactional
     public void insertTwice(BloodUnitNumber number) {
-        units.insert(UUID.randomUUID(), number.value(), BloodUnitStatus.COLLECTED.name(), "Первая вставка");
-        units.insert(UUID.randomUUID(), number.value(), BloodUnitStatus.COLLECTED.name(), "Вторая вставка");
+        save(UUID.randomUUID(), number, "Первая вставка");
+        save(UUID.randomUUID(), number, "Вторая вставка");
+    }
+
+    /**
+     * Одна вставка. Репозиторий делает persist и flush, и если номер уже есть, база отказывает:
+     * Spring превращает это в DataIntegrityViolationException, а мы бросаем свою DuplicateBloodUnit.
+     * Это unchecked-исключение, поэтому оно вылетает из метода с @Transactional, и Spring откатывает всё.
+     */
+    private void save(UUID id, BloodUnitNumber number, String title) {
+        try {
+            units.insert(id, number.value(), BloodUnitStatus.COLLECTED.name(), title);
+        } catch (DataIntegrityViolationException ex) {
+            throw new DuplicateBloodUnit(number.value());
+        }
     }
 }
