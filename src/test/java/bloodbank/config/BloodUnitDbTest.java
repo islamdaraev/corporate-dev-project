@@ -10,14 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-// НЕТ @Transactional на классе и на методах: тест должен видеть то, что реально сохранилось
+// НЕТ @Transactional на классе и на методах:
+// тест должен видеть то, что реально сохранилось
 @SpringBootTest(classes = Application.class)
 class BloodUnitDbTest {
 
@@ -30,10 +27,11 @@ class BloodUnitDbTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    // Таблицу создал Flyway (V1) при старте. Мы только чистим строки, таблицу не трогаем:
+    // DROP TABLE оставил бы в flyway_schema_history запись, что таблица есть.
     @BeforeEach
-    void cleanDatabase() throws IOException {
-        jdbc.execute("DROP TABLE IF EXISTS blood_unit");
-        jdbc.execute(Files.readString(Path.of("src/main/resources/db/schema.sql")));
+    void emptyTable() {
+        jdbc.update("DELETE FROM blood_unit");
     }
 
     @Test
