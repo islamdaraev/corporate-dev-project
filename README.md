@@ -111,10 +111,13 @@ mvn -q verify
 ```
 Должно пройти без вывода и без ошибок.
 
-## Lab 3 — PostgreSQL и JDBC
+## Lab 3 — PostgreSQL, JPA и Flyway
 
 Пакеты крови сохраняются в PostgreSQL (локально: база `css`, пользователь `css`, пароль `css`).
-Таблицу создаёт `src/main/resources/db/schema.sql`, Flyway и JPA не используются.
+Таблицу создаёт Flyway: файл `src/main/resources/db/migration/V1__create_blood_unit.sql`
+запускается при старте приложения, до проверки Hibernate. Hibernate таблицы не создаёт:
+`ddl-auto: validate` только сверяет сущность с таблицей. Изменение схемы всегда новый файл
+(`V2__...sql`), старый `V1` после запуска не правим.
 
 У пакета два идентификатора:
 
@@ -126,16 +129,23 @@ mvn -q verify
 Список в `CHECK` совпадает со статусами из таблицы выше
 (`COLLECTED`, `TESTED`, `RELEASED`, `ISSUED`, `DISCARDED`).
 
-Новые пакеты: `persistence` (JDBC, только SQL) и `client` (внешние порты, пока консоль).
-`domain` не импортирует ни `java.sql`, ни `org.springframework`.
+Новые пакеты: `persistence` (JPA: сущность и репозиторий) и `client` (внешние порты, пока консоль).
+`domain` не импортирует ни `jakarta.persistence`, ни `org.springframework`.
 
+- `BloodUnitEntity` (в `persistence`) — одна строка таблицы `blood_unit`, только названия колонок.
+  Статус хранится текстом, как в `CHECK`. Сущность не покидает `persistence`.
 - `BloodUnitRepository` (интерфейс в `domain`) — что нужно сервису от хранилища.
-  Его реализует `BloodUnitJdbc` в `persistence`.
+  Его реализует `BloodUnitJpa` в `persistence` (`EntityManager.persist` и `flush`).
 - `HospitalNotifier` (порт в `domain`) — сообщить больнице, что пакет выдан.
   Реализует `ConsoleHospitalNotifier` в `client`.
-- `DuplicateBloodUnit` — unchecked-исключение «такой номер уже есть». Его бросает репозиторий,
-  а транзакция откатывается.
+- `DuplicateBloodUnit` — unchecked-исключение «такой номер уже есть». Сервис ловит
+  `DataIntegrityViolationException` и бросает его заново, поэтому транзакция откатывается.
 
 Тесты: `BloodUnitServiceTest` (порт замокан), `BloodUnitDbTest`:
 `secondStatementRollsBack` — count 0, `secondRequestKeepsTheFirst` — count 1.
-Запуск: `mvn -q verify` (PostgreSQL должен быть запущен).
+Перед каждым тестом строки удаляются (`DELETE FROM`), таблицу тест не трогает.
+Запуск: `mvn -q verify` (PostgreSQL должен быть запущен, схема в базе пустая или уже на `V1`).
+
+Если в базе `css` уже есть таблица, созданная вручную, Flyway откажется запускать `V1`
+(«non-empty schema but no schema history»). Тогда пересоздай базу: `DROP DATABASE css;`
+и `CREATE DATABASE css OWNER css;`, потом запусти приложение.
