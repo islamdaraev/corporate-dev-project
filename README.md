@@ -149,3 +149,52 @@ mvn -q verify
 Если в базе `css` уже есть таблица, созданная вручную, Flyway откажется запускать `V1`
 («non-empty schema but no schema history»). Тогда пересоздай базу: `DROP DATABASE css;`
 и `CREATE DATABASE css OWNER css;`, потом запусти приложение.
+
+## Lab 4 — REST API
+
+Сервис отвечает по HTTP. Один ресурс, два глагола. Версия в пути: `/api/v1`.
+Id в пути это UUID из лабы 3, а не человеческий номер.
+
+| Запрос | Что делает | Ответы |
+|---|---|---|
+| `POST /api/v1/blood-units` | регистрирует пакет (статус `COLLECTED`) | 201 + `Location`, 400, 409 |
+| `GET /api/v1/blood-units/{id}` | читает пакет по UUID | 200, 400, 404 |
+
+Тело запроса: `{"businessKey": "BU-2026-000123", "title": "Цельная кровь, 450 мл"}`, оба поля обязательные,
+название не длиннее 120 символов. Ответ: `id`, `businessKey`, `status`, `title`.
+
+Необязательные поля (остаются на `/api/v1`, старый клиент может их не присылать):
+- `bloodGroup`: `O`, `A`, `B` или `AB`. Это международные буквы, цифрами их называют так:
+  I группа это `O`, II это `A`, III это `B`, IV это `AB`;
+- `rhFactor`: `POSITIVE` (положительный, +) или `NEGATIVE` (отрицательный, -).
+
+В API храним буквы, а не цифры 1-4: цифры путаются (первая по алфавиту или первая группа?), и замена слова
+на число считается несовместимым изменением контракта.
+
+Если поле не указано, в ответе его нет. Неверное слово даёт 400 `VALIDATION` и список допустимых слов
+(`bloodGroup must be one of [O, A, B, AB]`). В таблице для них колонки `blood_group` и `rh_factor`
+с `CHECK`, их добавляет миграция `V2__add_blood_group_and_rh.sql` (`V1` не менялась).
+
+Любая ошибка имеет один вид: `code`, `message`, `correlationId`. Стека и имён классов в ответе нет.
+Если клиент прислал заголовок `X-Correlation-Id`, он возвращается в теле ошибки, иначе номер создаётся.
+
+| Ситуация | Статус | code |
+|---|---|---|
+| пустой номер или название, название длиннее 120, тело не JSON, id не UUID | 400 | `VALIDATION` |
+| UUID правильный, но такого пакета нет | 404 | `NOT_FOUND` |
+| номер пакета уже есть (первая строка остаётся, count = 1) | 409 | `DUPLICATE` |
+| неверный Content-Type | 415 | `UNSUPPORTED` |
+| неожиданная ошибка | 500 | `INTERNAL` |
+
+Новые пакеты и классы:
+- `handler` — `BloodUnitController`, `CreateBloodUnit`, `BloodUnitResponse`, `ApiError`, `ApiErrors`
+  (единственное место, которое знает про коды 400, 404, 409), `ApiDocs` (название API для Swagger).
+- `domain` — `MissingBloodUnit` (unchecked, как `DuplicateBloodUnit`) и `BloodUnitView` (как пакет выглядит
+  для вызывающего). В `domain` нет Spring, `ResponseEntity` и `jakarta.validation`.
+- `BloodUnitService.register` теперь возвращает `BloodUnitView`, добавлен `require(id)`.
+
+Swagger: запусти приложение и открой `/swagger-ui.html` (описание в JSON: `/v3/api-docs`).
+Используется springdoc 2.6.0: он собран под Spring Boot 3.3, как у нас.
+
+Тесты: `BloodUnitControllerTest` (`@WebMvcTest`, сервис замокан, без базы) проверяет 201, 400, 404, 409,
+415, 500 и заголовок `X-Correlation-Id`. Тесты лабы 3 (count 0 и count 1) остаются без изменений.
