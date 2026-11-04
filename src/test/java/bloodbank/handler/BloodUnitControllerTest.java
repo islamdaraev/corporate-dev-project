@@ -142,6 +142,14 @@ class BloodUnitControllerTest {
     }
 
     @Test
+    void businessKeyOf65CharactersGives400() throws Exception {
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+                        .content(body("x".repeat(65), "Первая заявка")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("businessKey size must be between 0 and 64"));
+    }
+
+    @Test
     void titleOf121CharactersGives400() throws Exception {
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
                         .content(body("BU-2026-000001", "x".repeat(121))))
@@ -222,6 +230,22 @@ class BloodUnitControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.correlationId").value("abc-123"));
+    }
+
+    @Test
+    void strangeCorrelationIdIsReplacedByAGeneratedOne() throws Exception {
+        mvc.perform(post(URL).header("X-Correlation-Id", "bad id <script>")
+                        .contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.correlationId").value(org.hamcrest.Matchers.not("bad id <script>")))
+                .andExpect(jsonPath("$.correlationId").value(org.hamcrest.Matchers.matchesPattern("[0-9a-f-]{36}")));
+    }
+
+    @Test
+    void tooLongCorrelationIdIsReplacedByAGeneratedOne() throws Exception {
+        mvc.perform(post(URL).header("X-Correlation-Id", "a".repeat(65))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
+                .andExpect(jsonPath("$.correlationId").value(org.hamcrest.Matchers.matchesPattern("[0-9a-f-]{36}")));
     }
 
     @Test

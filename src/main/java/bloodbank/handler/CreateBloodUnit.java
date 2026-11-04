@@ -13,7 +13,8 @@ import jakarta.validation.constraints.Size;
  */
 public record CreateBloodUnit(
         @Schema(description = "Человеческий номер пакета, уникальный", example = "BU-2026-000001")
-        @NotBlank(message = "must not be blank") String businessKey,
+        @NotBlank(message = "must not be blank")
+        @Size(max = 64, message = "size must be between 0 and 64") String businessKey,
         @Schema(description = "Название пакета", example = "Цельная кровь, 450 мл")
         @NotBlank(message = "must not be blank")
         @Size(max = 120, message = "size must be between 0 and 120") String title,

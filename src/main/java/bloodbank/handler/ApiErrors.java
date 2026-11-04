@@ -20,6 +20,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Единственное место, которое знает про коды 400, 404, 409, 415 и 500.
@@ -29,6 +30,7 @@ import java.util.UUID;
 public class ApiErrors {
 
     private static final Logger log = LoggerFactory.getLogger(ApiErrors.class);
+    private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
     /** Пустое или слишком длинное поле: сервис даже не запускается. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -101,10 +103,14 @@ public class ApiErrors {
         return ResponseEntity.status(status).body(new ApiError(code, message, correlationId));
     }
 
-    /** Если клиент прислал X-Correlation-Id, повторяем его. Если нет или пусто, придумываем свой. */
+    /**
+     * Если клиент прислал нормальный X-Correlation-Id, повторяем его.
+     * Нормальный это до 64 символов: буквы, цифры, точка, подчёркивание, дефис.
+     * Если заголовка нет или он странный, придумываем свой, чтобы мусор не попал ни в лог, ни в ответ.
+     */
     private String correlation(HttpServletRequest req) {
         String id = req.getHeader("X-Correlation-Id");
-        if (id == null || id.isBlank()) {
+        if (id == null || !SAFE_ID.matcher(id).matches()) {
             return UUID.randomUUID().toString();
         }
         return id;
