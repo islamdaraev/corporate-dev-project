@@ -1,11 +1,15 @@
 package bloodbank.config;
 
+import bloodbank.domain.BloodGroup;
 import bloodbank.domain.BloodUnitId;
 import bloodbank.domain.BloodUnitNumber;
 import bloodbank.domain.BloodUnitRepository;
 import bloodbank.domain.BloodUnitStatus;
+import bloodbank.domain.BloodUnitView;
 import bloodbank.domain.DuplicateBloodUnit;
 import bloodbank.domain.HospitalNotifier;
+import bloodbank.domain.MissingBloodUnit;
+import bloodbank.domain.RhFactor;
 import bloodbank.domain.Rule;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -48,8 +52,28 @@ public class BloodUnitService {
      * и I — Isolation (транзакция короткая, PostgreSQL READ COMMITTED: другие видят только закоммиченное).
      */
     @Transactional
-    public void register(BloodUnitId id, BloodUnitNumber number, String title) {
-        save(id.value(), number, title);
+    public BloodUnitView register(BloodUnitId id, BloodUnitNumber number, String title) {
+        return register(id, number, title, null, null);
+    }
+
+    /**
+     * То же самое, но с группой крови и резусом. Оба необязательные: можно передать null.
+     * Эту версию вызывает контроллер, а короткая выше нужна тестам лабы 3.
+     */
+    @Transactional
+    public BloodUnitView register(BloodUnitId id, BloodUnitNumber number, String title,
+                                  BloodGroup bloodGroup, RhFactor rhFactor) {
+        save(id.value(), number, title, bloodGroup, rhFactor);
+        // новый пакет всегда начинает со статуса COLLECTED (так же, как пишет save)
+        return new BloodUnitView(id, number, BloodUnitStatus.COLLECTED, title, bloodGroup, rhFactor);
+    }
+
+    /**
+     * Прочитать пакет по id. Ничего не меняет: только загружает.
+     * Если пакета нет, бросаем MissingBloodUnit, а handler превратит её в 404.
+     */
+    public BloodUnitView require(BloodUnitId id) {
+        return units.findById(id.value()).orElseThrow(() -> new MissingBloodUnit(id.toString()));
     }
 
     /**
@@ -60,8 +84,8 @@ public class BloodUnitService {
      */
     @Transactional
     public void insertTwice(BloodUnitNumber number) {
-        save(UUID.randomUUID(), number, "Первая вставка");
-        save(UUID.randomUUID(), number, "Вторая вставка");
+        save(UUID.randomUUID(), number, "Первая вставка", null, null);
+        save(UUID.randomUUID(), number, "Вторая вставка", null, null);
     }
 
     /**
@@ -69,9 +93,11 @@ public class BloodUnitService {
      * Spring превращает это в DataIntegrityViolationException, а мы бросаем свою DuplicateBloodUnit.
      * Это unchecked-исключение, поэтому оно вылетает из метода с @Transactional, и Spring откатывает всё.
      */
-    private void save(UUID id, BloodUnitNumber number, String title) {
+    private void save(UUID id, BloodUnitNumber number, String title, BloodGroup bloodGroup, RhFactor rhFactor) {
         try {
-            units.insert(id, number.value(), BloodUnitStatus.COLLECTED.name(), title);
+            units.insert(id, number.value(), BloodUnitStatus.COLLECTED.name(), title,
+                    bloodGroup == null ? null : bloodGroup.name(),
+                    rhFactor == null ? null : rhFactor.name());
         } catch (DataIntegrityViolationException ex) {
             throw new DuplicateBloodUnit(number.value());
         }
