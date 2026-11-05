@@ -12,7 +12,7 @@ import java.util.UUID;
  * Одна строка таблицы blood_unit. Только названия колонок, никаких правил.
  * Правила переходов остаются в domain, а таблицу создаёт Flyway (V1), не Hibernate.
  */
-@Entity
+@Entity // аннотация является сущностью JPA
 @Table(name = "blood_unit")
 public class BloodUnitEntity {
 
@@ -30,18 +30,28 @@ public class BloodUnitEntity {
     @Column(nullable = false)
     private String title;
 
+    // группа крови и резус: необязательные, поэтому без nullable = false
+    @Column(name = "blood_group")
+    private String bloodGroup;
+
+    @Column(name = "rh_factor")
+    private String rhFactor;
+
     // время ставит база (DEFAULT now()), поэтому Java его не пишет
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    /** Нужен самому JPA, сами мы его не вызываем. */
+    /** Нужен самому JPA, сами мы его не вызываем. доступен внутри пакета и наследникам класса */
     protected BloodUnitEntity() {
     }
 
-    public BloodUnitEntity(UUID id, String businessKey, String status, String title) {
+    public BloodUnitEntity(UUID id, String businessKey, String status, String title,
+                           String bloodGroup, String rhFactor) {
         this.id = id;
         this.businessKey = businessKey;
         this.status = status;
         this.title = title;
+        this.bloodGroup = bloodGroup;
+        this.rhFactor = rhFactor;
     }
 }
