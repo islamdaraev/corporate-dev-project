@@ -1,6 +1,7 @@
 package bloodbank.handler;
 
 import bloodbank.domain.DuplicateBloodUnit;
+import bloodbank.domain.ForbiddenTransition;
 import bloodbank.domain.MissingBloodUnit;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -19,18 +22,16 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Arrays;
-import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
- * Единственное место, которое знает про коды 400, 404, 409, 415 и 500.
+ * Единственное место, которое знает про коды 400, 401, 403, 404, 409, 415 и 500
+ * (401 и 403 из цепочки фильтров пишет SecurityErrors, но тело у них такое же).
  * Исключения из domain про HTTP ничего не знают, здесь мы превращаем их в ApiError.
  */
 @RestControllerAdvice
 public class ApiErrors {
 
     private static final Logger log = LoggerFactory.getLogger(ApiErrors.class);
-    private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
     /** Пустое или слишком длинное поле: сервис даже не запускается. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -75,6 +76,30 @@ public class ApiErrors {
         return answer(HttpStatus.CONFLICT, "DUPLICATE", ex.getMessage(), correlation(req));
     }
 
+    /** Правила не разрешают переход статуса. Строка в таблице не менялась. */
+    @ExceptionHandler(ForbiddenTransition.class)
+    public ResponseEntity<ApiError> forbiddenTransition(ForbiddenTransition ex, HttpServletRequest req) {
+        return answer(HttpStatus.CONFLICT, "ILLEGAL_TRANSITION", ex.getMessage(), correlation(req));
+    }
+
+    /**
+     * Неверное имя или неверный пароль при входе. Текст ОДИН на оба случая:
+     * иначе по ответу можно узнать, какие имена пользователей существуют.
+     */
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiError> badLogin(BadCredentialsException ex, HttpServletRequest req) {
+        return answer(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "bad username or password", correlation(req));
+    }
+
+    /**
+     * Второй замок (@PreAuthorize на сервисе) сработал уже внутри контроллера. Без этого обработчика
+     * его поймал бы общий Exception ниже и клиент увидел бы 500 вместо 403.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> forbidden(AccessDeniedException ex, HttpServletRequest req) {
+        return answer(HttpStatus.FORBIDDEN, "FORBIDDEN", "not allowed for your role", correlation(req));
+    }
+
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiError> unsupportedType(HttpMediaTypeNotSupportedException ex, HttpServletRequest req) {
         return answer(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED", "content type is not supported", correlation(req));
@@ -103,16 +128,8 @@ public class ApiErrors {
         return ResponseEntity.status(status).body(new ApiError(code, message, correlationId));
     }
 
-    /**
-     * Если клиент прислал нормальный X-Correlation-Id, повторяем его.
-     * Нормальный это до 64 символов: буквы, цифры, точка, подчёркивание, дефис.
-     * Если заголовка нет или он странный, придумываем свой, чтобы мусор не попал ни в лог, ни в ответ.
-     */
+    /** Правило про X-Correlation-Id одно на весь проект, оно лежит в CorrelationId. */
     private String correlation(HttpServletRequest req) {
-        String id = req.getHeader("X-Correlation-Id");
-        if (id == null || !SAFE_ID.matcher(id).matches()) {
-            return UUID.randomUUID().toString();
-        }
-        return id;
+        return CorrelationId.from(req);
     }
 }
