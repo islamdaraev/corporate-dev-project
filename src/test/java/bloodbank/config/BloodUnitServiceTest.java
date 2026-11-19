@@ -7,6 +7,7 @@ import bloodbank.domain.BloodUnitRepository;
 import bloodbank.domain.BloodUnitStatus;
 import bloodbank.domain.BloodUnitView;
 import bloodbank.domain.FinalStatusRule;
+import bloodbank.domain.ForbiddenTransition;
 import bloodbank.domain.HospitalNotifier;
 import bloodbank.domain.MissingBloodUnit;
 import bloodbank.domain.RhFactor;
@@ -32,19 +33,87 @@ class BloodUnitServiceTest {
     private final BloodUnitService service = new BloodUnitService(
             new RuleChain(new TransitionRule(), new FinalStatusRule()), units, notifier);
 
-    @Test
-    void issuingReleasedUnitNotifiesHospital() {
-        service.issue(new BloodUnitNumber("BU-2026-000001"), BloodUnitStatus.RELEASED);
+    /** Пакет в таблице: нужен, чтобы сервис мог его прочитать (require) и проверить переход. */
+    private BloodUnitId unitInStatus(BloodUnitStatus current) {
+        BloodUnitId id = BloodUnitId.newId();
+        when(units.findById(id.value())).thenReturn(Optional.of(new BloodUnitView(
+                id, new BloodUnitNumber("BU-2026-000001"), current, "Цельная кровь", null, null)));
+        return id;
+    }
 
+    @Test
+    void issuingReleasedUnitWritesIssuedAndNotifiesHospital() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.RELEASED);
+        when(units.updateStatus(id.value(), "RELEASED", "ISSUED")).thenReturn(1);
+
+        BloodUnitView issued = service.issue(id, "chief");
+
+        assertEquals(BloodUnitStatus.ISSUED, issued.status());
+        verify(units).updateStatus(id.value(), "RELEASED", "ISSUED");
         verify(notifier).notifyIssued("BU-2026-000001");
     }
 
     @Test
-    void issuingCollectedUnitIsForbiddenAndHospitalIsNotNotified() {
-        assertThrows(IllegalStateException.class,
-                () -> service.issue(new BloodUnitNumber("BU-2026-000001"), BloodUnitStatus.COLLECTED));
+    void issuingCollectedUnitIsForbiddenRowIsNotChangedAndHospitalIsNotNotified() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.COLLECTED);
+
+        assertThrows(ForbiddenTransition.class, () -> service.issue(id, "chief"));
+
+        verify(units, never()).updateStatus(any(), any(), any());
+        verify(notifier, never()).notifyIssued(any());
+    }
+
+    @Test
+    void issuingAnAlreadyIssuedUnitIsForbidden() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.ISSUED);
+
+        assertThrows(ForbiddenTransition.class, () -> service.issue(id, "chief"));
+
+        verify(units, never()).updateStatus(any(), any(), any());
+    }
+
+    @Test
+    void ifSomeoneChangedTheStatusMeanwhileNothingIsOverwrittenAndHospitalIsNotNotified() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.RELEASED);
+        // UPDATE ... WHERE status = 'RELEASED' ничего не нашёл: статус уже другой
+        when(units.updateStatus(id.value(), "RELEASED", "ISSUED")).thenReturn(0);
+
+        assertThrows(ForbiddenTransition.class, () -> service.issue(id, "chief"));
 
         verify(notifier, never()).notifyIssued(any());
+    }
+
+    @Test
+    void issuingAnUnknownUnitThrowsMissingBloodUnit() {
+        BloodUnitId id = BloodUnitId.newId();
+        when(units.findById(id.value())).thenReturn(Optional.empty());
+
+        assertThrows(MissingBloodUnit.class, () -> service.issue(id, "chief"));
+    }
+
+    @Test
+    void sendToTestMovesCollectedToTested() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.COLLECTED);
+        when(units.updateStatus(id.value(), "COLLECTED", "TESTED")).thenReturn(1);
+
+        assertEquals(BloodUnitStatus.TESTED, service.sendToTest(id, "technician").status());
+    }
+
+    @Test
+    void releaseMovesTestedToReleased() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.TESTED);
+        when(units.updateStatus(id.value(), "TESTED", "RELEASED")).thenReturn(1);
+
+        assertEquals(BloodUnitStatus.RELEASED, service.release(id, "technician").status());
+    }
+
+    @Test
+    void releaseOfACollectedUnitIsForbidden() {
+        BloodUnitId id = unitInStatus(BloodUnitStatus.COLLECTED);
+
+        assertThrows(ForbiddenTransition.class, () -> service.release(id, "technician"));
+
+        verify(units, never()).updateStatus(any(), any(), any());
     }
 
     @Test
