@@ -25,4 +25,10 @@ public interface BloodUnitRepository {
      * Пустой Optional значит, что такой строки нет. Сущность наружу не отдаём: только BloodUnitView.
      */
     Optional<BloodUnitView> findById(UUID id);
+
+    /**
+     * Меняет статус, но только если сейчас он равен from. Возвращает, сколько строк изменилось (0 или 1).
+     * 0 значит, что кто-то уже поменял статус, и мы ничего не затёрли.
+     */
+    int updateStatus(UUID id, String from, String to);
 }

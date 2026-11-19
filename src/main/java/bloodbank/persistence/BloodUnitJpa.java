@@ -42,6 +42,17 @@ public class BloodUnitJpa implements BloodUnitRepository {
         return n.intValue();
     }
 
+    /** Одна команда UPDATE: статус меняется, только если в строке ещё стоит старый статус. */
+    @Override
+    public int updateStatus(UUID id, String from, String to) {
+        return em.createQuery(
+                        "update BloodUnitEntity b set b.status = :to where b.id = :id and b.status = :from")
+                .setParameter("to", to)
+                .setParameter("id", id)
+                .setParameter("from", from)
+                .executeUpdate();
+    }
+
     /** Читает пакет по id. Пустой Optional значит, что такой строки нет. */
     @Override
     public Optional<BloodUnitView> findById(UUID id) {
