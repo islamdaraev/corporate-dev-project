@@ -8,3 +8,6 @@ app:
   downstream:
     base-url: http://localhost:9090
     timeout: 2s
+  jwt:
+    # только для ноутбука (dev). Не короче 32 символов, иначе приложение не запустится
+    secret: dev-only-secret-bloodbank-0123456789abcdef
