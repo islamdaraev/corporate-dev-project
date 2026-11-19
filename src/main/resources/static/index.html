@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Банк крови</title>
+    <!-- пустой значок: браузер не просит /favicon.ico -->
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+    <!-- Шапка видна всегда: название и две роли -->
+    <header class="top">
+        <svg class="drop" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2.5C12 2.5 5 10 5 15a7 7 0 0 0 14 0c0-5-7-12.5-7-12.5z" fill="#C0392B"/>
+        </svg>
+        <span class="brand">Банк крови</span>
+        <span class="chip chip-tech">LAB_TECHNICIAN: лаборант</span>
+        <span class="chip chip-chief">CHIEF_PHYSICIAN: главврач</span>
+
+        <!-- Кто вошёл: показывается только на рабочем экране -->
+        <div class="session" id="session" hidden>
+            <span id="who"></span>
+            <span class="muted" id="timer"></span>
+            <button type="button" class="secondary" id="logout-btn">Выйти</button>
+        </div>
+    </header>
+
+    <!-- ЭКРАН 1: вход (до входа и после выхода) -->
+    <section id="screen-login">
+        <div class="narrow">
+            <div class="banner" id="banner" hidden></div>
+
+            <div class="card">
+                <h2>Вход</h2>
+                <form id="login-form">
+                    <input id="username" type="text" placeholder="Имя" aria-label="Имя" autocomplete="username">
+                    <input id="password" type="password" placeholder="Пароль" aria-label="Пароль" autocomplete="current-password">
+                    <button type="submit" class="primary full">Войти</button>
+                </form>
+
+                <p class="hint">Только для разработки (dev). Клик подставит в форму</p>
+                <button type="button" class="dev-row" data-user="technician" data-pass="tech-dev">
+                    <span class="mono">technician</span><span class="mono">tech-dev</span><span class="muted">лаборант</span>
+                </button>
+                <button type="button" class="dev-row" data-user="chief" data-pass="chief-dev">
+                    <span class="mono">chief</span><span class="mono">chief-dev</span><span class="muted">главврач</span>
+                </button>
+            </div>
+
+            <div class="center">
+                <button type="button" class="secondary" id="check-btn">Проверить защиту: прочитать пакет без токена</button>
+            </div>
+
+            <div class="card" id="login-result" hidden></div>
+        </div>
+    </section>
+
+    <!-- ЭКРАН 2: работа с пакетом (после входа) -->
+    <section id="screen-work" hidden>
+        <div class="grid">
+
+            <div class="card">
+                <h2>Пакет крови</h2>
+                <input id="unit-number" type="text" aria-label="Номер пакета" placeholder="BU-2026-000123">
+                <input id="unit-title" type="text" aria-label="Название" value="Цельная кровь, 450 мл">
+                <div class="buttons">
+                    <button type="button" class="primary" id="create-btn">Создать</button>
+                    <button type="button" class="secondary" id="create-ready-btn">Создать и подготовить к выдаче</button>
+                </div>
+
+                <p class="unit-line" id="unit-line"></p>
+                <div class="chain" id="chain"></div>
+
+                <div class="buttons">
+                    <button type="button" class="secondary" data-verb="test">На анализы</button>
+                    <button type="button" class="secondary" data-verb="release">Допустить к выдаче</button>
+                    <button type="button" class="secondary" data-verb="issue">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+                        </svg>
+                        Выдать в больницу
+                    </button>
+                </div>
+            </div>
+
+            <div class="card" id="work-result"></div>
+        </div>
+    </section>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
