@@ -10,6 +10,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Лаба 5: из actuator без токена открыт только /actuator/health (строка таблицы прав).
+ * Остальное закрыто цепочкой фильтров: сначала 401, до самого actuator запрос не доходит.
+ */
 @SpringBootTest(classes = Application.class)
 @AutoConfigureMockMvc
 class ActuatorTest {
@@ -25,15 +29,14 @@ class ActuatorTest {
     }
 
     @Test
-    void infoShowsTheProductName() throws Exception {
+    void infoIsClosedWithoutToken() throws Exception {
         mvc.perform(get("/actuator/info"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.app.name").value("Blood Bank"));
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void envAndHeapdumpAreNotExposed() throws Exception {
-        mvc.perform(get("/actuator/env")).andExpect(status().isNotFound());
-        mvc.perform(get("/actuator/heapdump")).andExpect(status().isNotFound());
+    void envAndHeapdumpAreNotAvailable() throws Exception {
+        mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/actuator/heapdump")).andExpect(status().isUnauthorized());
     }
 }

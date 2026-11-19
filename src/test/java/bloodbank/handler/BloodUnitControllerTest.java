@@ -14,12 +14,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static bloodbank.handler.TestTokens.technician;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -33,8 +36,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Только веб-слой: без PostgreSQL и без настоящего сервера. Сервис заменён моком.
+// Лаба 5: цепочка фильтров включена (SecurityConfig), поэтому каждый запрос идёт с токеном лаборанта.
+// Защиту в этом тесте не отключаем: фильтры работают, как в настоящем приложении.
 @WebMvcTest(BloodUnitController.class)
 @ContextConfiguration(classes = Application.class)
+@Import(SecurityConfig.class)
 class BloodUnitControllerTest {
 
     private static final String URL = "/api/v1/blood-units";
@@ -44,6 +50,10 @@ class BloodUnitControllerTest {
 
     @MockBean
     BloodUnitService service;
+
+    // настоящий декодер собирает JwtConfig, в тесте веб-слоя его нет. Токен тут подменяет jwt()
+    @MockBean
+    JwtDecoder jwtDecoder;
 
     private static String body(String businessKey, String title) {
         return "{\"businessKey\":\"" + businessKey + "\",\"title\":\"" + title + "\"}";
@@ -59,7 +69,7 @@ class BloodUnitControllerTest {
         when(service.register(any(BloodUnitId.class), any(BloodUnitNumber.class), eq("Первая заявка"), any(), any()))
                 .thenReturn(unit(id, "Первая заявка", null, null));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content(body("BU-2026-000001", "Первая заявка")))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", URL + "/" + id))
@@ -74,7 +84,7 @@ class BloodUnitControllerTest {
         when(service.register(any(BloodUnitId.class), any(BloodUnitNumber.class), any(), isNull(), isNull()))
                 .thenReturn(unit(BloodUnitId.newId(), "Первая заявка", null, null));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content(body("BU-2026-000001", "Первая заявка")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.bloodGroup").doesNotExist())
@@ -86,7 +96,7 @@ class BloodUnitControllerTest {
         when(service.register(any(BloodUnitId.class), any(BloodUnitNumber.class), any(), any(), any()))
                 .thenReturn(unit(BloodUnitId.newId(), "Цельная кровь", BloodGroup.A, RhFactor.POSITIVE));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"businessKey\":\"BU-2026-000001\",\"title\":\"Цельная кровь\","
                                 + "\"bloodGroup\":\"A\",\"rhFactor\":\"POSITIVE\"}"))
                 .andExpect(status().isCreated())
@@ -99,7 +109,7 @@ class BloodUnitControllerTest {
 
     @Test
     void unknownBloodGroupGives400ListingTheAllowedWords() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"businessKey\":\"BU-2026-000001\",\"title\":\"x\",\"bloodGroup\":\"Z\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
@@ -110,7 +120,7 @@ class BloodUnitControllerTest {
 
     @Test
     void unknownRhFactorGives400ListingTheAllowedWords() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"businessKey\":\"BU-2026-000001\",\"title\":\"x\",\"rhFactor\":\"MAYBE\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("rhFactor must be one of [POSITIVE, NEGATIVE]"));
@@ -118,7 +128,7 @@ class BloodUnitControllerTest {
 
     @Test
     void blankTitleGives400NamingTheFieldAndServiceIsNotCalled() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("title must not be blank"));
@@ -128,14 +138,14 @@ class BloodUnitControllerTest {
 
     @Test
     void titleOfOnlySpacesGives400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "   ")))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "   ")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("title must not be blank"));
     }
 
     @Test
     void blankBusinessKeyGives400NamingTheField() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("", "Первая заявка")))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON).content(body("", "Первая заявка")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("businessKey must not be blank"));
@@ -143,7 +153,7 @@ class BloodUnitControllerTest {
 
     @Test
     void businessKeyOf65CharactersGives400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content(body("x".repeat(65), "Первая заявка")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("businessKey size must be between 0 and 64"));
@@ -151,7 +161,7 @@ class BloodUnitControllerTest {
 
     @Test
     void titleOf121CharactersGives400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content(body("BU-2026-000001", "x".repeat(121))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("title size must be between 0 and 120"));
@@ -163,7 +173,7 @@ class BloodUnitControllerTest {
         when(service.register(any(BloodUnitId.class), any(BloodUnitNumber.class), eq(title), any(), any()))
                 .thenReturn(unit(BloodUnitId.newId(), title, null, null));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", title)))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", title)))
                 .andExpect(status().isCreated());
     }
 
@@ -172,7 +182,7 @@ class BloodUnitControllerTest {
         UUID id = UUID.randomUUID();
         when(service.require(any(BloodUnitId.class))).thenThrow(new MissingBloodUnit(id.toString()));
 
-        mvc.perform(get(URL + "/" + id))
+        mvc.perform(get(URL + "/" + id).with(technician()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
@@ -183,7 +193,7 @@ class BloodUnitControllerTest {
         when(service.require(any(BloodUnitId.class)))
                 .thenReturn(unit(id, "Первая заявка", BloodGroup.O, RhFactor.NEGATIVE));
 
-        mvc.perform(get(URL + "/" + id))
+        mvc.perform(get(URL + "/" + id).with(technician()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.status").value("COLLECTED"))
@@ -196,7 +206,7 @@ class BloodUnitControllerTest {
         when(service.register(any(BloodUnitId.class), any(BloodUnitNumber.class), any(), any(), any()))
                 .thenThrow(new DuplicateBloodUnit("BU-2026-000001"));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON)
                         .content(body("BU-2026-000001", "Ещё раз")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE"));
@@ -204,7 +214,7 @@ class BloodUnitControllerTest {
 
     @Test
     void businessKeyInThePathGives400WithUuidMessage() throws Exception {
-        mvc.perform(get(URL + "/BU-2026-000001"))
+        mvc.perform(get(URL + "/BU-2026-000001").with(technician()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("id must be a UUID"));
@@ -212,21 +222,21 @@ class BloodUnitControllerTest {
 
     @Test
     void bodyThatIsNotJsonGives400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("это не json"))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON).content("это не json"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("body must be JSON"));
     }
 
     @Test
     void wrongContentTypeGives415() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.TEXT_PLAIN).content("x"))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.TEXT_PLAIN).content("x"))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.code").value("UNSUPPORTED"));
     }
 
     @Test
     void correlationIdFromTheRequestComesBackInTheErrorBody() throws Exception {
-        mvc.perform(post(URL).header("X-Correlation-Id", "abc-123")
+        mvc.perform(post(URL).with(technician()).header("X-Correlation-Id", "abc-123")
                         .contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.correlationId").value("abc-123"));
@@ -234,7 +244,7 @@ class BloodUnitControllerTest {
 
     @Test
     void strangeCorrelationIdIsReplacedByAGeneratedOne() throws Exception {
-        mvc.perform(post(URL).header("X-Correlation-Id", "bad id <script>")
+        mvc.perform(post(URL).with(technician()).header("X-Correlation-Id", "bad id <script>")
                         .contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.correlationId").value(org.hamcrest.Matchers.not("bad id <script>")))
@@ -243,14 +253,14 @@ class BloodUnitControllerTest {
 
     @Test
     void tooLongCorrelationIdIsReplacedByAGeneratedOne() throws Exception {
-        mvc.perform(post(URL).header("X-Correlation-Id", "a".repeat(65))
+        mvc.perform(post(URL).with(technician()).header("X-Correlation-Id", "a".repeat(65))
                         .contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
                 .andExpect(jsonPath("$.correlationId").value(org.hamcrest.Matchers.matchesPattern("[0-9a-f-]{36}")));
     }
 
     @Test
     void missingCorrelationIdIsMintedByTheService() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
+        mvc.perform(post(URL).with(technician()).contentType(MediaType.APPLICATION_JSON).content(body("BU-2026-000001", "")))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
@@ -258,7 +268,7 @@ class BloodUnitControllerTest {
     void unexpectedErrorGives500WithoutDetails() throws Exception {
         when(service.require(any(BloodUnitId.class))).thenThrow(new IllegalStateException("секретная деталь"));
 
-        mvc.perform(get(URL + "/" + UUID.randomUUID()))
+        mvc.perform(get(URL + "/" + UUID.randomUUID()).with(technician()))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL"))
                 .andExpect(jsonPath("$.message").value("unexpected error"));
