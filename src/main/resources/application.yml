@@ -1,6 +1,10 @@
 spring:
   profiles:
     default: dev
+  datasource:
+    hikari:
+      # каждое подключение приложения к базе сразу переходит на время Казахстана (UTC+5)
+      connection-init-sql: SET TIME ZONE 'Asia/Almaty'
   jpa:
     hibernate:
       ddl-auto: validate
